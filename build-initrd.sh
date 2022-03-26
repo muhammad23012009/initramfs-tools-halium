@@ -41,7 +41,7 @@ done
 [ -z $ARCH ] && ARCH="armhf"
 [ -z $MIRROR ] && MIRROR=$DEFAULTMIRROR
 [ -z $UBPORTSMIRROR ] && UBPORTSMIRROR=$DEFAULTUBPORTSMIRROR
-[ -z $RELEASE ] && RELEASE="buster"
+[ -z $RELEASE ] && RELEASE="stretch"
 [ -z $UBPORTSRELEASE ] && UBPORTSRELEASE="xenial"
 [ -z $ROOT ] && ROOT=./build/$ARCH
 [ -z $OUT ] && OUT=./out
