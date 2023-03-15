@@ -1,0 +1,47 @@
+name: halium-initramfs
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        arch: [armhf, arm64, amd64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Initialize environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install qemu-user-static debootstrap -y
+
+      - name: Build initramfs
+        run: sudo ARCH=${{ matrix.arch }} ./build-initrd.sh
+
+      - name : Upload artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: halium-initramfs-${{ matrix.arch }}
+          path: out/
+
+  upload:
+    needs: build
+    runs-on: ubuntu-18.04
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/halium' }}
+
+    steps:
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v2
+
+      # Here we're abusing the "continuous" tag/release to store the latest
+      # built image. This is not very good practice, but GitHub won't allow
+      # unauthenticated user to download artifacts. Hence, this abuse.
+
+      - name: Release to the continuous tag.
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: continuous
+          files: halium-initramfs-*/*
+          fail_on_unmatched_files: true

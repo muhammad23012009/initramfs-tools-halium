@@ -57,6 +57,19 @@ identify_boot_mode() {
 		esac
 	fi
 
+	# On Android 8+ devices the 'android' boot mode is broken and should be avoided.
+	# This behavior can be overridden with the cmdline flag 'halium_no_avoid_android_mode'
+	# List of API levels and referred Android versions: https://source.android.com/setup/start/build-numbers
+	if ! grep -wq halium_no_avoid_android_mode /proc/cmdline; then
+		api_level=$(sed -n 's/^ro.build.version.sdk=//p' /android-system/build.prop) # e.g. 26 for Android 8.0
+		[ -z "$api_level" ] && api_level=0
+		tell_kmsg "Android system image API level is $api_level"
+		if [ "$BOOT_MODE" = "android" ] && [ $api_level -ge 26 ]; then
+			tell_kmsg "Android 8+ device detected! Charging is to be handled by rootfs, continue boot normally"
+			BOOT_MODE='halium'
+		fi
+	fi
+
 	tell_kmsg "boot mode: $BOOT_MODE"
 }
 
@@ -172,7 +185,7 @@ mount_android_partitions() {
 	done
 
 	# Provide a bind mount from /cache to /userdata/cache on systems without a dedicated cache partition
-	if [ ! -e ${mount_root}/cache ]; then
+	if [ ! -e ${mount_root}/cache ] || ! grep -q "${mount_root}/cache" /proc/mounts; then
 		if [ ! -d ${real_userdata}/cache ]; then
 			mkdir ${real_userdata}/cache
 		fi
@@ -212,7 +225,7 @@ sync_dirs() {
 
 	for file in $source/*; do
 		# Skip empty directories
-		[ ! -e "$base/$file" ] && continue
+		[ ! -e "$base/$file" -a ! -L "$base/$file" ] && continue
 
 		# If the target already exists as a file or link, there's nothing we can do
 		[ -e "$target/$file" -o -L "$target/$file" ] && [ ! -d "$target/$file" ] && continue
@@ -271,6 +284,9 @@ identify_file_layout() {
 	if [ -e /tmpmnt/rootfs.img ]; then
 		imagefile=/tmpmnt/rootfs.img
 		file_layout="halium"
+	elif [ -e /tmpmnt/ubuntu.img ]; then
+		imagefile=/tmpmnt/ubuntu.img
+		file_layout="legacy"
 	elif [ -d /tmpmnt/halium-rootfs ]; then
 		imagefile=/tmpmnt/halium-rootfs
 		file_layout="subdir"
@@ -353,12 +369,22 @@ process_bind_mounts() {
 				sync_dirs $dstpath . $srcpath
 			fi
 
-			# Write the fstab entry
 			if [ "$5" = "none" ]; then
-				echo "$path $1 none bind 0 0" >>$FSTAB
+				mount_opts="bind"
 			else
-				echo "$path $1 none bind,$5 0 0" >>$FSTAB
+				mount_opts="bind,$5"
 			fi
+
+			# mount all /etc dirs right now, not later when fstab is
+			# processed, as it will cause races (e.g. /etc/machine-id).
+			case "$1" in
+				/etc/*)
+					mount -o "$mount_opts" "$srcpath" "$dstpath"
+					;;
+				*)
+					echo "$path $1 none $mount_opts 0 0" >>$FSTAB
+					;;
+			esac
 		else
 			continue
 		fi
@@ -483,7 +509,6 @@ mountroot() {
 		esac
 	fi
 
-	identify_boot_mode
 	identify_file_layout
 
 	# If both $imagefile and $_syspart are set, something is wrong. The strange
@@ -549,6 +574,8 @@ mountroot() {
 
 	[ $ANDROID_IMAGE_MODE = "rootfs" ] && mount -o bind $MOUNT_LOCATION/system /android-system
 	[ $ANDROID_IMAGE_MODE = "system" ] && extract_android_ramdisk
+
+	identify_boot_mode
 
 	# Determine whether we should boot to rootfs or Android
 	if ([ -e $imagefile ] || [ -n "$_syspart" ]) && [ "$BOOT_MODE" = "android" ]; then
