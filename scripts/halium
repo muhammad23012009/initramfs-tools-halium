@@ -535,7 +535,8 @@ mountroot() {
 
 	tell_kmsg "mounting system rootfs at /halium-system"
 	if [ -n "$_syspart" ]; then
-		mount -o "$_syspart_options" $_syspart /halium-system
+		veritysetup open $_syspart ut-rootfs /tmpmnt/verityhash.bin $(cat /tmpmnt/roothash.txt)
+                mount -o "$_syspart_options" /dev/mapper/ut-rootfs /halium-system
 	elif [ -f "$imagefile" ]; then
 		# Rootfs is an image file
 		mount -o loop,rw $imagefile /halium-system

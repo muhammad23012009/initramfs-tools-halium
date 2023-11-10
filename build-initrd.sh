@@ -47,7 +47,7 @@ done
 [ -z $OUT ] && OUT=./out
 
 # list all packages needed for halium's initrd here
-[ -z $INCHROOTPKGS ] && INCHROOTPKGS="initramfs-tools dctrl-tools dmsetup e2fsprogs libc6-dev zlib1g-dev libssl-dev busybox-static parse-android-dynparts"
+[ -z $INCHROOTPKGS ] && INCHROOTPKGS="initramfs-tools dctrl-tools dmsetup e2fsprogs libc6-dev zlib1g-dev libssl-dev busybox-static parse-android-dynparts cryptsetup-bin"
 
 BOOTSTRAP_BIN="qemu-debootstrap --arch $ARCH --variant=minbase"
 
